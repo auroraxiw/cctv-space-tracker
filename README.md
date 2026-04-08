@@ -8,7 +8,7 @@ A single-file, browser-based application for analysing CCTV footage. It detects 
 
 ## Live demo
 
-[[https://your-username.github.io/cctv-space-tracker](https://your-username.github.io/cctv-space-tracker)](https://auroraxiw.github.io/cctv-space-tracker)
+https://auroraxiw.github.io/cctv-space-tracker
 
 *(Settings → Pages → Branch: `main` → Folder: `/` → Save)*
 
