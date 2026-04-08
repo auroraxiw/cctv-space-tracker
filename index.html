@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CCTV Space Tracker</title>
+<style>
+:root{
+  --bg:#0c0e17;--surf:#12141e;--surf2:#181a26;--surf3:#1e2030;
+  --bd:rgba(255,255,255,.07);--bd2:rgba(255,255,255,.13);
+  --text:#d0d4e0;--muted:#58607a;
+  --blue:#3b8fd4;--green:#1a9670;--red:#d94848;--amber:#e09b25;--orange:#c95c28;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono',ui-monospace,Consolas,monospace;font-size:11px;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── topbar ── */
+#topbar{display:flex;align-items:center;gap:10px;padding:0 14px;height:40px;background:var(--surf);border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap}
+.logo{font-size:12px;font-weight:700;letter-spacing:.04em;color:#dde2ee}.logo span{color:var(--blue)}
+.badge{font-size:9px;padding:2px 7px;border-radius:6px;border:1px solid;font-weight:600}
+.b-live{color:#f87171;border-color:#f87171;animation:blink 1.2s infinite}
+.b-pause{color:var(--muted);border-color:var(--muted)}
+.b-loading{color:var(--amber);border-color:var(--amber);animation:blink .6s infinite}
+.b-ready{color:var(--green);border-color:var(--green)}
+.b-csv{color:#7065cc;border-color:#7065cc}
+#tr{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tsel{font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:4px;padding:2px 7px;height:24px;font-family:inherit}
+#hts{font-size:10px;color:var(--muted);font-family:monospace}
+
+/* ── model bar ── */
+#modelbar{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surf2);border-bottom:1px solid var(--bd);flex-shrink:0;font-size:10px;color:var(--muted)}
+#modelbar b{color:var(--text)}
+#mprog{flex:1;height:3px;background:var(--surf3);border-radius:2px;overflow:hidden}
+#mfill{height:100%;background:var(--blue);border-radius:2px;transition:width .3s;width:0%}
+
+/* ── main layout ── */
+#main{display:grid;grid-template-columns:1fr 1fr 212px;gap:1px;background:var(--bd);flex:1}
+.panel{background:var(--bg);display:flex;flex-direction:column}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--surf);border-bottom:1px solid var(--bd);flex-shrink:0;gap:6px}
+.ptitle{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.cwrap{position:relative;height:260px;overflow:hidden;background:#000;flex-shrink:0}
+.cwrap canvas{position:absolute;inset:0;width:100%;height:100%}
+
+/* ── toolbar buttons ── */
+.mbtns{display:flex;gap:3px;flex-wrap:wrap}
+.mb{font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid var(--bd2);color:var(--muted);cursor:pointer;background:transparent;white-space:nowrap;font-family:inherit}
+.mb.on{border-color:var(--green);color:var(--green);background:rgba(26,150,112,.1)}
+.mb.on-purple{border-color:#7065cc;color:#7065cc;background:rgba(112,101,204,.12)}
+.mb.on-amber{border-color:var(--amber);color:var(--amber);background:rgba(224,155,37,.1)}
+
+/* ── legend strip ── */
+#legstrip{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surf);border-top:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap}
+.legbar{flex:1;min-width:40px;height:3px;border-radius:2px}
+#legstrip .mb{font-size:9px}
+
+/* ── sidebar ── */
+#sidebar{display:flex;flex-direction:column;gap:1px;background:var(--bd)}
+.sb{background:var(--bg);padding:8px 10px;flex-shrink:0}
+.sbg{background:var(--bg);padding:8px 10px;flex:1;overflow-y:auto;min-height:60px}
+.sbt{font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;border-bottom:1px solid var(--bd);padding-bottom:3px}
+.upz{border:1px dashed rgba(255,255,255,.1);border-radius:5px;padding:7px 8px;text-align:center;cursor:pointer;color:var(--muted);font-size:10px;line-height:1.9;transition:all .2s}
+.upz:hover{border-color:var(--blue);color:var(--blue)}
+.upz.ok{border-color:var(--green);color:var(--green);border-style:solid}
+.upz b{display:block;font-size:10px;font-weight:700}
+input[type=file]{display:none}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.stat{background:var(--surf2);border-radius:4px;padding:5px;text-align:center}
+.sv{font-size:17px;font-weight:700;color:#e0e5f0;line-height:1.2}
+.sl{font-size:8px;color:var(--muted);margin-top:1px}
+.prow{display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.prow:last-child{border:none}
+.pdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pnm{font-size:10px;width:36px;color:#9aa0b4;font-family:monospace}
+.bb{flex:1;height:3px;background:var(--surf3);border-radius:2px;overflow:hidden}
+.bf{height:100%;border-radius:2px;transition:width .4s}
+.bv{font-size:9px;color:var(--muted);width:26px;text-align:right}
+.srow{display:flex;align-items:center;gap:5px;padding:2px 0}
+.snm{font-size:9px;color:var(--muted);width:76px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.frow{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.frow label{font-size:9px;color:var(--muted);width:50px;flex-shrink:0}
+.frow select,.frow input[type=text],.frow input[type=date],.frow input[type=time],.frow input[type=number]{
+  flex:1;font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:3px;padding:2px 5px;font-family:inherit;min-width:0}
+.btn{display:block;font-size:10px;padding:5px 9px;border-radius:4px;border:1px solid var(--bd2);background:var(--surf2);color:var(--text);cursor:pointer;width:100%;margin-top:4px;text-align:center;font-family:inherit}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn-blue{background:var(--blue);color:white;border-color:var(--blue)}.btn-blue:hover{background:#2a7bbf}
+.btn-green{background:var(--green);color:white;border-color:var(--green)}.btn-green:hover{background:#137558}
+.btn-red{color:var(--red);border-color:rgba(217,72,72,.3)}.btn-red:hover{background:rgba(217,72,72,.08)}
+.btn-purple{background:#534AB7;color:white;border-color:#534AB7}.btn-purple:hover{background:#3C3489}
+
+/* ── ctrlbar ── */
+#ctrlbar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--surf);border-top:1px solid var(--bd);flex-shrink:0}
+.pbtn{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd2);background:var(--surf3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pbtn:hover{border-color:var(--blue)}
+.tri{width:0;height:0;border:4px solid transparent;border-left:8px solid var(--text);margin-left:2px}
+.brs{display:flex;gap:2px}.br{width:2px;height:8px;background:var(--text);border-radius:1px}
+.tlt{flex:1;height:4px;background:var(--surf3);border-radius:2px;cursor:pointer;position:relative}
+.tlf{height:100%;background:var(--blue);border-radius:2px}
+.tlth{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--blue);top:50%;transform:translate(-50%,-50%);pointer-events:none}
+.tslbl{font-size:10px;color:var(--muted);font-family:monospace;min-width:90px;text-align:center}
+#spdsel{font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:4px;padding:2px 6px;height:24px;font-family:inherit;cursor:pointer}
+
+/* ── modals ── */
+.modal{display:none;position:fixed;inset:0;background:rgba(4,6,14,.93);z-index:200;overflow-y:auto;padding:20px 14px}
+.mbox{max-width:560px;margin:0 auto;background:var(--surf);border:1px solid var(--bd2);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:11px}
+.mbox.narrow{max-width:380px}
+.mh{font-size:12px;font-weight:700;color:#dde2ee}
+.md{font-size:10px;color:var(--muted);line-height:1.85}.md b{color:#dde2ee}
+.mrow{display:flex;align-items:center;gap:8px}
+.mrow label{font-size:10px;color:var(--muted);flex-shrink:0;width:76px}
+.mrow input,.mrow select{flex:1;font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:3px;padding:3px 6px;font-family:inherit;min-width:0}
+.mbtns{display:flex;gap:7px;flex-wrap:wrap}
+.mbtns .btn{width:auto;margin:0}
+
+/* heatmap editor */
+.grad-stop{display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--surf2);border-radius:4px;border:1px solid var(--bd);margin-bottom:5px}
+.grad-stop input[type=color]{width:30px;height:22px;border:none;border-radius:3px;cursor:pointer;padding:0;background:none;flex-shrink:0}
+.grad-stop input[type=range]{flex:1;min-width:0}
+.grad-stop span{font-size:9px;color:var(--muted);width:28px;text-align:right;flex-shrink:0}
+.grad-preview{height:12px;border-radius:4px;margin:2px 0}
+.hm-slider-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.hm-slider-row label{font-size:10px;color:var(--muted);width:80px;flex-shrink:0}
+.hm-slider-row input[type=range]{flex:1}
+.hm-slider-row span{font-size:10px;color:var(--text);width:36px;text-align:right;flex-shrink:0}
+
+/* camera editor */
+.cam-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.cam-btn{font-size:10px;padding:6px 4px;border-radius:4px;border:1px solid var(--bd2);background:var(--surf2);color:var(--text);cursor:pointer;text-align:center;font-family:inherit;transition:all .15s}
+.cam-btn:hover{border-color:var(--blue);color:var(--blue)}
+.cam-btn.sel{border-color:var(--orange);color:var(--orange);background:rgba(201,92,40,.12)}
+.cam-pos-list{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto}
+.cam-pos-item{display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--surf2);border-radius:4px;font-size:10px}
+.cam-pos-item .dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0}
+.cam-pos-item span{flex:1;color:var(--text)}
+.cam-pos-item small{color:var(--muted);font-family:monospace}
+
+/* label picker */
+#labelpicker{display:none;position:fixed;z-index:300;background:var(--surf);border:1px solid var(--bd2);border-radius:8px;padding:12px 14px;min-width:170px}
+#lp-btns{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px}
+
+/* prescan person cards */
+.pscard{background:var(--surf2);border:1px solid var(--bd2);border-radius:6px;padding:7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:border-color .15s}
+.pscard:hover{border-color:var(--blue)}
+.pscard.assigned{border-color:var(--green)}
+.pscard canvas{border-radius:3px;display:block;width:100%}
+.pscard .pslabel{font-size:10px;font-weight:700;font-family:monospace;color:var(--text)}
+.pscard .psauto{font-size:9px;color:var(--muted)}
+.pscard select{font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:3px;padding:2px 4px;font-family:inherit;width:100%}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="logo">CCTV <span>Space</span> Tracker</span>
+  <span class="badge b-loading" id="lbadge">⟳ LOADING</span>
+  <div id="tr">
+    <select class="tsel" id="camsel" onchange="setCam(this.value)">
+      <option value="C1">C1 — Atrium</option><option value="C2">C2 — Junction</option>
+      <option value="C3">C3 — Kitchen</option><option value="C4">C4 — Operations</option>
+      <option value="C5">C5 — Mech WS</option><option value="C6">C6 — Elec WS</option>
+      <option value="C7">C7 — Bio Lab</option>
+    </select>
+    <span id="hts">—</span>
+  </div>
+</div>
+
+<div id="modelbar">
+  <b id="mstatus">Loading COCO-SSD…</b>
+  <div id="mprog"><div id="mfill"></div></div>
+  <span id="mpct">0%</span>
+</div>
+
+<div id="main">
+
+  <!-- Video panel -->
+  <div class="panel">
+    <div class="ph">
+      <span class="ptitle">Camera · <span id="camlbl">C1</span></span>
+      <div class="mbtns">
+        <span style="font-size:9px;color:var(--muted)" id="detcount">—</span>
+        <div class="mb" id="label-btn" onclick="toggleLabelMode()" title="Click a person to assign ID">Label</div>
+      </div>
+    </div>
+    <div class="cwrap" id="vwrap">
+      <canvas id="vc"></canvas>
+      <video id="vid" muted playsinline preload="auto" style="display:none"></video>
+    </div>
+  </div>
+
+  <!-- Floor panel -->
+  <div class="panel">
+    <div class="ph">
+      <span class="ptitle">Floor plan · <span id="flrcamlbl">C1</span></span>
+      <div class="mbtns">
+        <div class="mb on" id="mbh" onclick="togMode('heat')">Heat</div>
+        <div class="mb on" id="mbt" onclick="togMode('track')">Tracks</div>
+        <div class="mb on" id="mbd" onclick="togMode('dots')">Live</div>
+        <div class="mb on" id="mb-bg" onclick="togMode('bg')" title="Toggle floor plan image">BG</div>
+        <div class="mb on" id="mb-zones" onclick="togMode('zones')" title="Show/hide zones">Zones</div>
+        <div class="mb" id="zone-btn" onclick="toggleZoneMode()">Draw zone</div>
+      </div>
+    </div>
+    <div class="cwrap" id="fwrap"><canvas id="fc"></canvas></div>
+    <div id="legstrip">
+      <span style="font-size:8px;color:var(--muted)">Low</span>
+      <div class="legbar" id="legbar-el"></div>
+      <span style="font-size:8px;color:var(--muted)">High</span>
+      <div class="mb" onclick="openHeatEditor()">Heat opts</div>
+      <div class="mb" onclick="openCalibration()">Calibrate</div>
+      <div class="mb" onclick="openCamEditor()">Cam pos</div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="sb">
+      <div class="sbt">Sources</div>
+      <div class="upz" id="uzv" onclick="document.getElementById('fiv').click()">
+        <b>Video file</b>MP4 · MKV · AVI · MOV
+      </div>
+      <input type="file" id="fiv" accept="video/*" onchange="loadVideoFile(this)">
+      <div class="upz" style="margin-top:5px" id="uzf" onclick="document.getElementById('fif').click()">
+        <b>Floor plan image</b>PNG · JPG
+      </div>
+      <input type="file" id="fif" accept="image/*" onchange="loadFloor(this)">
+      <div class="upz" style="margin-top:5px" id="uzcsv" onclick="document.getElementById('ficsv').click()">
+        <b>Replay from CSV</b>Exported tracks CSV
+      </div>
+      <input type="file" id="ficsv" accept=".csv,text/csv" onchange="loadCSV(this)">
+      <div style="font-size:9px;color:var(--muted);margin-top:5px;line-height:1.6" id="vidinfo">Load model, then upload video or CSV</div>
+    </div>
+
+    <div class="sb">
+      <div class="sbt">Live stats</div>
+      <div class="sgrid">
+        <div class="stat"><div class="sv" id="svdet">0</div><div class="sl">Detected</div></div>
+        <div class="stat"><div class="sv" id="svheat">0</div><div class="sl">Heat pts</div></div>
+        <div class="stat"><div class="sv" id="svtrk">0</div><div class="sl">Active now</div></div>
+        <div class="stat"><div class="sv" id="svfrm">0</div><div class="sl">Frame</div></div>
+      </div>
+    </div>
+
+    <div class="sbg">
+      <div class="sbt">Persons</div>
+      <div id="plist"></div>
+      <div class="sbt" style="margin-top:10px">Space usage</div>
+      <div id="slist"></div>
+    </div>
+
+    <div class="sb">
+      <div class="sbt">Session</div>
+      <div class="frow"><label>Date</label><input type="date" id="fdate" value="2026-02-20"></div>
+      <div class="frow">
+        <label>Day</label>
+        <input type="number" id="fday" min="1" max="14" value="1" style="width:44px;flex:none">
+        <span style="font-size:9px;color:var(--muted);margin-left:4px">/ 14</span>
+      </div>
+      <div class="frow"><label>Session</label>
+        <select id="fsess"><option>Morning 08–10</option><option>Noon 12–14</option><option>Evening 17–19</option></select>
+      </div>
+      <button class="btn btn-blue"  onclick="exportSessionCSV()">Export session CSV</button>
+      <button class="btn btn-green" onclick="exportAllCSV()">Export all tracks CSV</button>
+      <button class="btn btn-red"   onclick="resetAll()">Reset heatmap + tracks</button>
+      <button class="btn" onclick="userZones=[];spZoneCounts={}" style="color:var(--muted)">Clear drawn zones</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctrlbar">
+  <div class="pbtn" id="pbtn" onclick="togglePlay()">
+    <div id="picon" class="brs"><div class="br"></div><div class="br"></div></div>
+  </div>
+  <div class="tlt" id="tlt" onclick="seekClick(event)">
+    <div class="tlf" id="tlf" style="width:0%"></div>
+    <div class="tlth" id="tlth" style="left:0%"></div>
+  </div>
+  <span class="tslbl" id="tslbl">00:00:00 / 00:00:00</span>
+  <select id="spdsel" onchange="setSpeed(this.value)">
+    <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option><option value="1.5">1.5×</option>
+    <option value="2">2×</option><option value="4">4×</option>
+    <option value="8">8×</option><option value="16">16×</option>
+  </select>
+  <button id="start-btn" onclick="startAnalysis()"
+    style="font-size:10px;padding:4px 12px;border-radius:5px;border:1px solid var(--green);background:rgba(26,150,112,.15);color:var(--green);cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;font-weight:600">
+    ▶ Start analysis
+  </button>
+</div>
+
+<!-- ═══ MODALS ═══════════════════════════════════════════════ -->
+
+<!-- Video confirm -->
+<div class="modal" id="confirm-modal">
+ <div class="mbox">
+  <div class="mh">Confirm video details</div>
+  <div class="md">Set the camera and exact recording start time before loading.</div>
+  <div class="mrow"><label>Filename</label><span id="cf-name" style="font-size:10px;color:var(--text);font-family:monospace;word-break:break-all;flex:1"></span></div>
+  <div class="mrow"><label>Duration</label><span id="cf-dur" style="font-size:10px;color:var(--text)"></span></div>
+  <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px">Camera</div>
+  <div class="cam-grid" id="cf-cam-grid"></div>
+  <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Recording start</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="mrow"><label>Date</label><input type="date" id="cf-date" value="2026-02-20"></div>
+    <div class="mrow"><label>Time</label><input type="time" id="cf-time" value="08:00:00" step="1"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="mrow"><label>Day</label>
+      <input type="number" id="cf-day" min="1" max="14" value="1" style="width:44px;flex:none">
+      <span style="font-size:9px;color:var(--muted);margin-left:4px">/ 14</span>
+    </div>
+    <div class="mrow"><label>Session</label>
+      <select id="cf-sess"><option>Morning 08–10</option><option>Noon 12–14</option><option>Evening 17–19</option></select>
+    </div>
+  </div>
+  <div class="mbtns">
+    <button class="btn btn-green" onclick="confirmVideo()">Confirm &amp; load</button>
+    <button class="btn btn-red" onclick="document.getElementById('confirm-modal').style.display='none'">Cancel</button>
+  </div>
+ </div>
+</div>
+
+<!-- Heatmap options -->
+<div class="modal" id="heat-modal">
+ <div class="mbox">
+  <div class="mh">Heatmap options</div>
+  <div class="hm-slider-row">
+    <label>Opacity</label>
+    <input type="range" id="hm-opacity" min="5" max="100" step="1" value="70" oninput="heatOpts.opacity=+this.value/100;document.getElementById('hm-opacity-v').textContent=this.value+'%';heatCache=null;lastHeatLen=0">
+    <span id="hm-opacity-v">70%</span>
+  </div>
+  <div class="hm-slider-row">
+    <label>Radius</label>
+    <input type="range" id="hm-radius" min="1" max="15" step="1" value="5" oninput="heatOpts.radiusPct=+this.value/100;document.getElementById('hm-radius-v').textContent=this.value+'%';heatCache=null;lastHeatLen=0">
+    <span id="hm-radius-v">5%</span>
+  </div>
+  <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Gradient stops</div>
+  <div id="grad-stops"></div>
+  <div style="margin-top:4px">
+    <div style="font-size:9px;color:var(--muted);margin-bottom:3px">Preview</div>
+    <div class="grad-preview" id="grad-preview-bar"></div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="btn" onclick="addGradStop()" style="width:auto;margin:0">+ Add</button>
+    <button class="btn" onclick="removeGradStop()" style="width:auto;margin:0">− Remove last</button>
+    <button class="btn" onclick="resetGradient()" style="width:auto;margin:0">Reset</button>
+  </div>
+  <div class="mbtns">
+    <button class="btn btn-green" onclick="applyGradient()">Apply</button>
+    <button class="btn btn-red" onclick="document.getElementById('heat-modal').style.display='none'">Close</button>
+  </div>
+ </div>
+</div>
+
+<!-- Zone name -->
+<div class="modal" id="zone-modal">
+ <div class="mbox narrow">
+  <div class="mh">Name this zone</div>
+  <div class="mrow"><label>Name</label><input id="zname" type="text" placeholder="e.g. Workbench" maxlength="32"></div>
+  <div class="mrow" style="margin-top:4px"><label>Colour</label>
+    <input id="zcolor" type="color" value="#7065cc" style="width:44px;height:26px;border:none;border-radius:3px;cursor:pointer;padding:0;background:none;flex:none">
+  </div>
+  <div class="mbtns">
+    <button class="btn btn-green" onclick="confirmZone()">Save</button>
+    <button class="btn btn-red" onclick="cancelZone()">Discard</button>
+  </div>
+ </div>
+</div>
+
+<!-- Calibration (homography) -->
+<div class="modal" id="cal-modal">
+ <div class="mbox">
+  <div class="mh">Homography — <span id="cal-cam-name">C1</span></div>
+  <div class="md">Click <b>matching points</b> on camera frame (left) and floor plan (right). Use <b>4–12 pairs</b> for fish-eye lenses.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Camera frame</span>
+      <canvas id="cal-v" width="270" height="170" style="border:1px solid var(--bd2);border-radius:4px;cursor:crosshair;display:block;width:100%"></canvas>
+      <div style="font-size:9px;color:var(--muted)" id="cal-v-info">0 pts</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Floor plan</span>
+      <canvas id="cal-f" width="270" height="170" style="border:1px solid var(--bd2);border-radius:4px;cursor:crosshair;display:block;width:100%"></canvas>
+      <div style="font-size:9px;color:var(--muted)" id="cal-f-info">0 pts</div>
+    </div>
+  </div>
+  <div style="font-size:10px;padding:5px 8px;background:var(--surf2);border-radius:4px;border:1px solid var(--bd)" id="cal-status">Add at least 4 pairs.</div>
+  <div class="mbtns">
+    <button class="btn btn-green" onclick="applyH()">Apply</button>
+    <button class="btn" onclick="undoCal()">Undo last</button>
+    <button class="btn" onclick="undoCalCam()" title="Remove last camera point only">Undo cam pt</button>
+    <button class="btn" onclick="undoCalFloor()" title="Remove last floor point only">Undo floor pt</button>
+    <button class="btn" onclick="clearCal()">Clear all</button>
+    <button class="btn btn-red" onclick="deleteCalForCam()" title="Delete saved homography for this camera">Delete saved</button>
+    <button class="btn" onclick="document.getElementById('cal-modal').style.display='none'">Cancel</button>
+  </div>
+ </div>
+</div>
+
+<!-- Camera position editor -->
+<div class="modal" id="camposedit-modal">
+ <div class="mbox">
+  <div class="mh">Camera positions on floor plan</div>
+  <div class="md">Select a camera then click on the floor plan preview to set its position. The orange dot shows the current position.</div>
+  <div class="cam-grid" id="cpe-cam-grid"></div>
+  <div style="position:relative;margin-top:6px">
+    <canvas id="cpe-canvas" width="500" height="310" style="border:1px solid var(--bd2);border-radius:6px;cursor:crosshair;display:block;width:100%"></canvas>
+  </div>
+  <div class="cam-pos-list" id="cpe-list"></div>
+  <div class="mbtns">
+    <button class="btn btn-green" onclick="document.getElementById('camposedit-modal').style.display='none'">Done</button>
+    <button class="btn" onclick="resetCamPositions()">Reset defaults</button>
+  </div>
+ </div>
+</div>
+
+<!-- Pre-scan / label assignment modal -->
+<div class="modal" id="prescan-modal">
+ <div class="mbox">
+  <div class="mh">Assign person IDs before analysis</div>
+  <div class="md">The video has been scanned for all people who appear. <b>Click each thumbnail</b> to assign an ID. You can skip anyone and they will keep an auto-assigned label.<br><br>When done, click <b>Start analysis</b> — the video will replay from the beginning and record data with your labels.</div>
+  <div id="prescan-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:340px;overflow-y:auto;margin:4px 0"></div>
+  <div style="font-size:9px;color:var(--muted)" id="prescan-status">Scanning…</div>
+  <div class="mbtns" id="prescan-btns" style="display:none">
+    <button class="btn btn-green" onclick="confirmPrescan()">Start analysis</button>
+    <button class="btn" onclick="document.getElementById('prescan-modal').style.display='none'">Cancel</button>
+  </div>
+ </div>
+</div>
+
+<!-- Label picker -->
+<div id="labelpicker">
+  <div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:8px">
+    Assign — track <span id="lp-tid" style="color:var(--amber)"></span>
+  </div>
+  <div id="lp-btns"></div>
+  <div style="display:flex;gap:5px;align-items:center;border-top:1px solid var(--bd);padding-top:8px">
+    <input id="lp-custom" type="text" placeholder="Custom…" maxlength="8"
+      style="flex:1;font-size:10px;background:var(--surf3);color:var(--text);border:1px solid var(--bd2);border-radius:3px;padding:3px 5px;font-family:inherit">
+    <button onclick="applyCustomLabel()" style="font-size:10px;padding:3px 7px;border-radius:3px;border:1px solid var(--bd2);background:var(--surf3);color:var(--text);cursor:pointer;font-family:inherit">OK</button>
+  </div>
+  <button onclick="clearLabelForTrack()" style="margin-top:5px;font-size:9px;padding:2px 0;border:none;background:transparent;color:var(--muted);cursor:pointer;width:100%;text-align:left">× Clear this assignment</button>
+  <button onclick="resetAllLabels()" style="margin-top:2px;font-size:9px;padding:2px 0;border:none;background:transparent;color:var(--red);cursor:pointer;width:100%;text-align:left">× Reset ALL labels</button>
+  <button onclick="closeLabelPicker()" style="position:absolute;top:6px;right:8px;font-size:11px;border:none;background:transparent;color:var(--muted);cursor:pointer">✕</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<script>
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PIDS  = ['AA01','AA02','AA03','AA04','AA05','AA06','AA07'];
+const PCOLS = ['#3b8fd4','#c95c28','#1a9670','#b84d7a','#7065cc','#a87218','#3db8a0'];
+const PTCOLS= ['#3b8fd4','#c95c28','#1a9670','#b84d7a','#a87218','#7065cc','#3db8a0','#d94848','#e09b25','#5a9e3a','#c04488','#8855cc'];
+const CAM_LABELS = {C1:'Atrium',C2:'Junction',C3:'Kitchen',C4:'Operations',C5:'Mech WS',C6:'Elec WS',C7:'Bio Lab'};
+
+// Default camera positions (normalised 0-1 on floor plan)
+const DEFAULT_CAM_POS = {C1:[.36,.49],C2:[.42,.34],C3:[.49,.18],C4:[.31,.18],C5:[.15,.42],C6:[.23,.42],C7:[.62,.30]};
+
+// ─── Mutable state ────────────────────────────────────────────────────────────
+let camPos = Object.fromEntries(Object.entries(DEFAULT_CAM_POS).map(([k,v])=>[k,[...v]]));
+
+let playing=false, speed=1, activeCam='C1';
+let showHeat=true, showTrack=true, showDots=true, showBG=true, showZones=true;
+let heatPts=[], tracks={}, allRows=[];
+let floorImg=null, floorImgVisible=true;
+let homos={};
+let heatCache=null, lastHeatLen=0;
+let frameCount=0;
+
+// Heatmap visual options
+let heatOpts = { opacity:0.70, radiusPct:0.055 };
+
+// Gradient stops
+let gradStops = [
+  {pos:0.0,color:'#0a1628'},{pos:0.3,color:'#1a5fa5'},
+  {pos:0.6,color:'#d94848'},{pos:1.0,color:'#ffdd00'},
+];
+let gradEdit = [];
+
+// User zones: {name, color, pts:[[x,y]…], closed}
+let userZones = [];
+let zoneDraft = [], zoneModeOn = false, pendingZone = null;
+
+// Space usage: counts per user zone (by zone index)
+let spZoneCounts = {};  // {zoneIdx: seconds}
+
+// Person seconds: keyed by label string (AA01…AA07)
+let personSecs = {};    // {label: seconds}
+
+// Person seconds and zone seconds — keyed by label / zone index
+// Seconds are computed from actual video timestamp delta, not render frames
+let lastAccumVideoTime = -1;
+
+// Label overrides
+let labelMap = {}, pendingLabelTrackId = null;
+
+// Detection
+let model=null, modelReady=false, detecting=false;
+let detections=[], nextId=0, trackerState={};
+const IOU_THRESH=0.35, MAX_GONE=45, DETECT_EVERY=3;
+
+// Video confirm
+let pendingVideoFile=null, confirmedCam='C1', videoStartTime=null;
+
+// Analysis gate — must be explicitly started after setup
+let analysisStarted=false;
+
+// Pre-scan state
+let prescanRunning=false;
+let prescanTracks={};    // {trackId: {snapCanvas, bbox, firstSeen}}
+let prescanDone=false;
+
+// CSV replay mode
+let csvMode=false, csvFrames=[], csvT=0, csvDur=0, csvPlaying=false;
+
+// ─── Canvases ─────────────────────────────────────────────────────────────────
+const vid=document.getElementById('vid');
+const vc=document.getElementById('vc'), vx=vc.getContext('2d');
+const fc=document.getElementById('fc'), fx=fc.getContext('2d');
+
+function sizeCanvases(){
+  const vw=document.getElementById('vwrap'), fw=document.getElementById('fwrap');
+  if(vw.clientWidth){vc.width=vw.clientWidth;vc.height=vw.clientHeight||260;}
+  if(fw.clientWidth){fc.width=fw.clientWidth;fc.height=fw.clientHeight||260;}
+  heatCache=null;
+}
+window.addEventListener('load',sizeCanvases);
+window.addEventListener('resize',sizeCanvases);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function hexAlpha(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
+function buildCSSGrad(stops){const s=[...stops].sort((a,b)=>a.pos-b.pos);return`linear-gradient(to right,${s.map(s=>`${s.color} ${Math.round(s.pos*100)}%`).join(',')})`;}
+function fmtT(s){s=Math.max(0,s);return[Math.floor(s/3600),Math.floor(s%3600/60),Math.floor(s%60)].map(v=>String(v).padStart(2,'0')).join(':');}
+function buildTS(vs){
+  if(videoStartTime){const b=new Date(videoStartTime.getTime()+Math.round(vs)*1000);return b.toISOString().replace('T',' ').slice(0,19);}
+  const d=document.getElementById('fdate').value||'2026-02-20';
+  const sess=document.getElementById('fsess').value||'';
+  const h=sess.includes('Noon')?12:sess.includes('Evening')?17:8;
+  const base=new Date(`${d}T${String(h).padStart(2,'0')}:00:00`);
+  base.setSeconds(base.getSeconds()+Math.round(vs));
+  return base.toISOString().replace('T',' ').slice(0,19);
+}
+function getLabel(id){return labelMap[id]??PIDS[id%PIDS.length]??`T${id}`;}
+function getColor(id){const l=getLabel(id);const i=PIDS.indexOf(l);return i>=0?PCOLS[i]:PCOLS[id%PCOLS.length];}
+function updateLegBar(){const el=document.getElementById('legbar-el');if(el)el.style.background=buildCSSGrad(gradStops);}
+
+// ─── Homography (IDW) ──────────────────────────────────────────────────────────
+function mapFloor(px,py,vW,vH,cam){
+  const nx=px/vW, ny=py/vH;
+  const H=homos[cam];
+  if(!H||H.src.length<4)return[nx,ny];
+  const EPS=1e-9;let wx=0,wy=0,ws=0;
+  for(let i=0;i<H.src.length;i++){const d2=(nx-H.src[i][0])**2+(ny-H.src[i][1])**2,w=1/(d2+EPS);wx+=w*H.dst[i][0];wy+=w*H.dst[i][1];ws+=w;}
+  return[Math.max(0,Math.min(1,wx/ws)),Math.max(0,Math.min(1,wy/ws))];
+}
+
+// ─── Space usage via user zones ────────────────────────────────────────────────
+function pointInZone(x,y,zone){
+  // Ray casting for polygon
+  const pts=zone.pts; let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function getZoneForPoint(x,y){
+  for(let i=0;i<userZones.length;i++){if(userZones[i].closed&&pointInZone(x,y,userZones[i]))return i;}
+  return -1;
+}
+function buildSpaceList(){
+  const sl=document.getElementById('slist');
+  if(!userZones.length){sl.innerHTML='<div style="font-size:9px;color:var(--muted);line-height:1.8">Draw zones on the floor plan<br>to see usage in seconds</div>';return;}
+  const vals=userZones.map((_,i)=>spZoneCounts[i]||0);
+  const mxZ=Math.max(...vals,1);
+  sl.innerHTML=userZones.map((z,i)=>{
+    const secs=vals[i], p=Math.round(secs/mxZ*100);
+    const secsStr=secs>=60?`${Math.floor(secs/60)}m${Math.round(secs%60)}s`:`${Math.round(secs)}s`;
+    return`<div class="srow">
+      <span class="snm" style="color:${z.color}">${z.name}</span>
+      <div class="bb"><div class="bf" style="width:${p}%;background:${z.color}"></div></div>
+      <span class="bv" style="width:36px;font-size:9px">${secs>0?secsStr:'0s'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ─── COCO-SSD ─────────────────────────────────────────────────────────────────
+async function loadModel(){
+  document.getElementById('mfill').style.width='10%';
+  document.getElementById('mpct').textContent='10%';
+  try{
+    model=await cocoSsd.load({base:'lite_mobilenet_v2'});
+    modelReady=true;
+    document.getElementById('mstatus').textContent='Model ready — upload video or CSV';
+    document.getElementById('mfill').style.width='100%';
+    document.getElementById('mpct').textContent='100%';
+    document.getElementById('lbadge').textContent='READY';
+    document.getElementById('lbadge').className='badge b-ready';
+    document.getElementById('modelbar').style.background='rgba(26,150,112,.08)';
+  }catch(e){
+    document.getElementById('mstatus').textContent='Model error: '+e.message;
+    document.getElementById('lbadge').textContent='ERROR';
+    document.getElementById('lbadge').className='badge b-pause';
+  }
+}
+
+// IoU tracker
+function iou(a,b){const ax2=a[0]+a[2],ay2=a[1]+a[3],bx2=b[0]+b[2],by2=b[1]+b[3];const ix=Math.max(0,Math.min(ax2,bx2)-Math.max(a[0],b[0])),iy=Math.max(0,Math.min(ay2,by2)-Math.max(a[1],b[1]));const inter=ix*iy;return inter/(a[2]*a[3]+b[2]*b[3]-inter+1e-6);}
+function assignTracks(rawBoxes){
+  const used=new Set(),matched=[];
+  for(const[id,ts]of Object.entries(trackerState)){
+    let bestIou=IOU_THRESH,bestIdx=-1;
+    rawBoxes.forEach((b,i)=>{if(used.has(i))return;const sc=iou(ts.bbox,b.bbox);if(sc>bestIou){bestIou=sc;bestIdx=i;}});
+    if(bestIdx>=0){used.add(bestIdx);trackerState[id].bbox=rawBoxes[bestIdx].bbox;trackerState[id].lastSeen=frameCount;const b=rawBoxes[bestIdx].bbox;matched.push({id:+id,bbox:b,cx:b[0]+b[2]/2,cy:b[1]+b[3]/2,score:rawBoxes[bestIdx].score});}
+  }
+  rawBoxes.forEach((b,i)=>{if(used.has(i))return;const id=nextId++;trackerState[id]={bbox:b.bbox,lastSeen:frameCount};matched.push({id,bbox:b.bbox,cx:b.bbox[0]+b.bbox[2]/2,cy:b.bbox[1]+b.bbox[3]/2,score:b.score});});
+  for(const id of Object.keys(trackerState)){if(frameCount-trackerState[id].lastSeen>MAX_GONE)delete trackerState[id];}
+  return matched;
+}
+async function runDetect(){
+  if(!modelReady||!model||detecting||vid.paused||vid.ended||vid.readyState<2)return;
+  detecting=true;
+  try{const preds=await model.detect(vid);const persons=preds.filter(p=>p.class==='person'&&p.score>0.45);detections=assignTracks(persons.map(p=>({bbox:p.bbox,score:p.score})));}catch(e){}
+  detecting=false;
+}
+
+// ─── Draw: video canvas ────────────────────────────────────────────────────────
+function drawVideo(){
+  const W=vc.width,H=vc.height;if(!W||!H)return;
+  vx.clearRect(0,0,W,H);
+  if(csvMode){drawCSVVideoFrame(W,H);return;}
+  if(vid.readyState>=2){try{vx.drawImage(vid,0,0,W,H);}catch(e){}}
+  else{vx.fillStyle='#070913';vx.fillRect(0,0,W,H);vx.fillStyle='rgba(80,95,120,.45)';vx.font='9px monospace';vx.textAlign='center';vx.fillText(modelReady?'Upload a video':'Loading model…',W/2,H/2);return;}
+  const vW=vid.videoWidth||W,vH=vid.videoHeight||H,scx=W/vW,scy=H/vH;
+  detections.forEach(d=>{
+    const[bx,by,bw,bh]=d.bbox,px=bx*scx,py=by*scy,pw=bw*scx,ph=bh*scy;
+    const label=getLabel(d.id),col=getColor(d.id);
+    const sel=d.id===pendingLabelTrackId;
+    vx.strokeStyle=sel?'#e09b25':col;vx.lineWidth=sel?2.5:1.8;
+    if(sel)vx.setLineDash([4,3]);
+    vx.strokeRect(px,py,pw,ph);vx.setLineDash([]);
+    vx.fillStyle=sel?'rgba(224,155,37,.8)':'rgba(0,0,0,.6)';vx.fillRect(px,py-14,pw,13);
+    vx.fillStyle=sel?'#000':col;vx.font='bold 7.5px monospace';vx.textAlign='center';
+    vx.fillText(`${label} ${Math.round(d.score*100)}%`,px+pw/2,py-3);
+  });
+  document.getElementById('detcount').textContent=detections.length+' person'+(detections.length!==1?'s':'');
+  const ts=buildTS(vid.currentTime);
+  vx.fillStyle='rgba(0,0,0,.5)';vx.fillRect(6,6,138,14);
+  vx.fillStyle='rgba(190,210,230,.85)';vx.font='8px monospace';vx.textAlign='left';
+  vx.fillText(`${ts}  ${activeCam}`,10,16);
+}
+function drawCSVVideoFrame(W,H){
+  vx.fillStyle='#070913';vx.fillRect(0,0,W,H);
+  vx.fillStyle='rgba(112,101,204,.4)';vx.font='9px monospace';vx.textAlign='center';
+  vx.fillText('CSV REPLAY MODE',W/2,H/2-8);
+  const ts=buildTS(csvT);
+  vx.fillStyle='rgba(0,0,0,.5)';vx.fillRect(6,6,138,14);
+  vx.fillStyle='rgba(190,210,230,.85)';vx.font='8px monospace';vx.textAlign='left';
+  vx.fillText(`${ts}  ${activeCam}`,10,16);
+}
+
+// ─── Draw: floor canvas ────────────────────────────────────────────────────────
+function buildHeatCanvas(){
+  const W=fc.width,H=fc.height;
+  // Build a density grid first, then colour-map it
+  const R=Math.max(4, Math.round(W*heatOpts.radiusPct));
+  const density=new Float32Array(W*H);
+  heatPts.forEach(p=>{
+    const cx=Math.round(p[0]*W), cy=Math.round(p[1]*H);
+    for(let dy=-R;dy<=R;dy++){for(let dx=-R;dx<=R;dx++){
+      const d2=dx*dx+dy*dy; if(d2>R*R) continue;
+      const ix=cx+dx, iy=cy+dy;
+      if(ix<0||ix>=W||iy<0||iy>=H) continue;
+      density[iy*W+ix]+=(1-Math.sqrt(d2)/R);
+    }}
+  });
+  // Normalise
+  let maxD=0; for(let i=0;i<density.length;i++) if(density[i]>maxD) maxD=density[i];
+  if(maxD===0) return document.createElement('canvas');
+
+  // Build colour-map from gradStops
+  const sorted=[...gradStops].sort((a,b)=>a.pos-b.pos);
+  function stopColor(t){
+    if(t<=sorted[0].pos) return hexToRgb(sorted[0].color);
+    if(t>=sorted[sorted.length-1].pos) return hexToRgb(sorted[sorted.length-1].color);
+    for(let i=0;i<sorted.length-1;i++){
+      if(t>=sorted[i].pos&&t<=sorted[i+1].pos){
+        const f=(t-sorted[i].pos)/(sorted[i+1].pos-sorted[i].pos);
+        const a=hexToRgb(sorted[i].color), b=hexToRgb(sorted[i+1].color);
+        return[a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+      }
+    }
+    return[0,0,0];
+  }
+  function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+
+  const off=document.createElement('canvas'); off.width=W; off.height=H;
+  const oc=off.getContext('2d');
+  const img=oc.createImageData(W,H);
+  const d=img.data;
+  for(let i=0;i<density.length;i++){
+    const v=density[i]/maxD;
+    if(v<0.01) continue;
+    const [r,g,b]=stopColor(v);
+    d[i*4]=Math.round(r); d[i*4+1]=Math.round(g); d[i*4+2]=Math.round(b);
+    d[i*4+3]=Math.round(v*heatOpts.opacity*255);
+  }
+  oc.putImageData(img,0,0);
+  return off;
+}
+
+function drawFloor(){
+  const W=fc.width,H=fc.height;if(!W||!H)return;
+  fx.clearRect(0,0,W,H);
+
+  // Background
+  if(floorImg&&showBG){
+    fx.drawImage(floorImg,0,0,W,H);
+    fx.fillStyle='rgba(8,10,20,.35)';fx.fillRect(0,0,W,H);
+  }else{
+    fx.fillStyle='#0c0e17';fx.fillRect(0,0,W,H);
+  }
+
+  // Heatmap
+  if(showHeat&&heatPts.length>3){
+    if(heatPts.length!==lastHeatLen){heatCache=buildHeatCanvas();lastHeatLen=heatPts.length;}
+    if(heatCache)fx.drawImage(heatCache,0,0);
+  }
+
+  // User zones
+  if(showZones){
+    userZones.forEach(z=>{
+      if(z.pts.length<2)return;
+      fx.beginPath();fx.moveTo(z.pts[0][0]*W,z.pts[0][1]*H);
+      for(let i=1;i<z.pts.length;i++)fx.lineTo(z.pts[i][0]*W,z.pts[i][1]*H);
+      if(z.closed)fx.closePath();
+      fx.fillStyle=z.color+'28';fx.fill();
+      fx.strokeStyle=z.color+'cc';fx.lineWidth=1.5;fx.stroke();
+      const cx=z.pts.reduce((s,p)=>s+p[0],0)/z.pts.length*W;
+      const cy=z.pts.reduce((s,p)=>s+p[1],0)/z.pts.length*H;
+      fx.fillStyle=z.color;fx.font='bold 8px monospace';fx.textAlign='center';fx.fillText(z.name,cx,cy+3);
+    });
+  }
+
+  // Draft zone
+  if(zoneModeOn&&zoneDraft.length>0){
+    fx.beginPath();fx.moveTo(zoneDraft[0][0]*W,zoneDraft[0][1]*H);
+    for(let i=1;i<zoneDraft.length;i++)fx.lineTo(zoneDraft[i][0]*W,zoneDraft[i][1]*H);
+    fx.strokeStyle='rgba(255,255,255,.5)';fx.lineWidth=1.2;fx.setLineDash([4,3]);fx.stroke();fx.setLineDash([]);
+    zoneDraft.forEach((p,i)=>{fx.beginPath();fx.arc(p[0]*W,p[1]*H,3,0,Math.PI*2);fx.fillStyle=i===0?'#e09b25':'white';fx.fill();});
+  }
+
+  // Tracks
+  if(showTrack){
+    Object.entries(tracks).forEach(([k,pts])=>{
+      if(pts.length<2)return;
+      const col=getColor(+k);
+      fx.beginPath();fx.moveTo(pts[0][0]*W,pts[0][1]*H);
+      for(let i=1;i<pts.length;i++)fx.lineTo(pts[i][0]*W,pts[i][1]*H);
+      fx.strokeStyle=col+'aa';fx.lineWidth=1.4;fx.stroke();
+    });
+  }
+
+  // Live dots
+  if(showDots){
+    const pts=csvMode?getCsvCurrentDots():getLiveDots();
+    pts.forEach(d=>{
+      const cx=d.x*W,cy=d.y*H,col=d.col;
+      fx.beginPath();fx.arc(cx,cy,5,0,Math.PI*2);fx.fillStyle=col;fx.fill();
+      fx.beginPath();fx.arc(cx,cy,9,0,Math.PI*2);fx.strokeStyle=col+'44';fx.lineWidth=1.2;fx.stroke();
+      fx.fillStyle='white';fx.font='bold 5.5px monospace';fx.textAlign='center';fx.fillText(d.label,cx,cy+2);
+    });
+  }
+
+  // Camera markers
+  Object.entries(camPos).forEach(([cid,pos])=>{
+    const cx=pos[0]*W,cy=pos[1]*H,isA=cid===activeCam,hasH=homos[cid]?.src?.length>=4;
+    fx.beginPath();fx.arc(cx,cy,isA?5:3.5,0,Math.PI*2);
+    fx.fillStyle=isA?'#c95c28':hasH?'rgba(26,150,112,.6)':'rgba(120,135,165,.22)';fx.fill();
+    if(isA){fx.beginPath();fx.arc(cx,cy,9,0,Math.PI*2);fx.strokeStyle='rgba(201,92,40,.3)';fx.lineWidth=1.2;fx.stroke();}
+    fx.fillStyle=isA?'white':hasH?'#1a9670':'rgba(120,135,165,.45)';fx.font='bold 5px monospace';fx.textAlign='center';fx.fillText(cid,cx,cy+1.8);
+  });
+}
+
+function getLiveDots(){
+  const vW=vid.videoWidth||vc.width,vH=vid.videoHeight||vc.height;
+  return detections.map(d=>{const[fx2,fy2]=mapFloor(d.cx,d.cy,vW,vH,activeCam);return{x:fx2,y:fy2,col:getColor(d.id),label:getLabel(d.id),id:d.id};});
+}
+
+// ─── CSV replay ────────────────────────────────────────────────────────────────
+function loadCSV(inp){
+  const file=inp.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const lines=e.target.result.split('\n').filter(l=>l.trim());
+    const header=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
+    const fi=k=>header.indexOf(k);
+    const rows=lines.slice(1).map(l=>{
+      const cols=l.split(',').map(c=>c.replace(/"/g,'').trim());
+      return{
+        t:parseFloat(cols[fi('frame')]||0)/25,
+        person:cols[fi('person_id')]||'',
+        x:parseFloat(cols[fi('floor_x')]||0),
+        y:parseFloat(cols[fi('floor_y')]||0),
+        cam:cols[fi('camera')]||activeCam,
+        space:cols[fi('space')]||'',
+        datetime:cols[fi('datetime')]||'',
+      };
+    }).filter(r=>!isNaN(r.t)&&!isNaN(r.x)&&!isNaN(r.y));
+    if(!rows.length){alert('No valid rows found in CSV.');return;}
+    csvFrames=rows;
+    csvDur=Math.max(...rows.map(r=>r.t));
+    csvT=0; csvMode=true; csvPlaying=false;
+    playing=false;
+    resetAll(true); // keep zones
+    heatPts=[]; tracks={}; heatCache=null; lastHeatLen=0;
+    document.getElementById('uzcsv').className='upz ok';
+    document.getElementById('uzcsv').innerHTML=`<b>${file.name}</b>${rows.length} rows · ${fmtT(csvDur)}`;
+    document.getElementById('vidinfo').textContent=`CSV: ${file.name} · ${rows.length} detections`;
+    document.getElementById('lbadge').textContent='CSV REPLAY';
+    document.getElementById('lbadge').className='badge b-csv';
+    updatePlayBtn(false);
+  };
+  reader.readAsText(file);
+}
+
+function getCsvCurrentDots(){
+  if(!csvFrames.length)return[];
+  const visible=csvFrames.filter(r=>Math.abs(r.t-csvT)<0.5);
+  const seen={};
+  visible.forEach(r=>{seen[r.person]={x:r.x,y:r.y,person:r.person};});
+  return Object.values(seen).map(d=>{
+    const idx=PIDS.indexOf(d.person);
+    return{x:d.x,y:d.y,col:idx>=0?PCOLS[idx]:PCOLS[Object.keys(seen).indexOf(d.person)%PCOLS.length],label:d.person};
+  });
+}
+
+let csvAccumTick=0, csvLastT=-1;
+function csvStep(dt){
+  if(!csvPlaying)return;
+  const prevT=csvT;
+  csvT=Math.min(csvT+dt*speed,csvDur);
+  if(csvT>=csvDur){csvT=csvDur;csvPlaying=false;updatePlayBtn(false);}
+  const realDt=csvT-prevT; // actual CSV-time seconds elapsed this step
+  csvAccumTick++;
+  if(csvAccumTick%3===0&&realDt>0){
+    const dots=getCsvCurrentDots();
+    const seenLabels=new Set(), seenZones=new Set();
+    dots.forEach(d=>{
+      heatPts.push([d.x,d.y]);
+      if(heatPts.length>8000)heatPts.shift();
+      if(!seenLabels.has(d.label)){
+        seenLabels.add(d.label);
+        personSecs[d.label]=(personSecs[d.label]||0)+realDt;
+      }
+      const zi=getZoneForPoint(d.x,d.y);
+      if(zi>=0&&!seenZones.has(zi)){
+        seenZones.add(zi);
+        spZoneCounts[zi]=(spZoneCounts[zi]||0)+realDt;
+      }
+    });
+    heatCache=null;
+  }
+}
+// ─── Accumulate live data ──────────────────────────────────────────────────────
+let accumTick=0;
+function accumulate(){
+  if(csvMode)return;
+  if(++accumTick%3!==0)return;
+  if(vid.readyState<2||vid.paused)return;
+  if(!analysisStarted)return;
+  const t=vid.currentTime,ts=buildTS(t);
+  // Real elapsed video seconds since last accumulate tick
+  const dtSec = lastAccumVideoTime>=0 ? Math.max(0, Math.min(t-lastAccumVideoTime, 1.0)) : 0;
+  lastAccumVideoTime = t;
+  if(dtSec<=0)return; // same frame or seek — don't double-count
+  const vW=vid.videoWidth||vc.width,vH=vid.videoHeight||vc.height;
+  const seenLabels=new Set(), seenZones=new Set();
+  detections.forEach(d=>{
+    const[ffx,ffy]=mapFloor(d.cx,d.cy,vW,vH,activeCam);
+    const label=getLabel(d.id);
+    if(!tracks[d.id])tracks[d.id]=[];
+    tracks[d.id].push([+ffx.toFixed(4),+ffy.toFixed(4)]);
+    if(tracks[d.id].length>300)tracks[d.id].shift();
+    heatPts.push([+ffx.toFixed(4),+ffy.toFixed(4)]);
+    if(heatPts.length>8000)heatPts.shift();
+    heatCache=null;
+    if(!seenLabels.has(label)){
+      seenLabels.add(label);
+      personSecs[label]=(personSecs[label]||0)+dtSec;
+    }
+    const zi=getZoneForPoint(ffx,ffy);
+    if(zi>=0&&!seenZones.has(zi)){
+      seenZones.add(zi);
+      spZoneCounts[zi]=(spZoneCounts[zi]||0)+dtSec;
+    }
+    allRows.push({frame:Math.round(t*25),datetime:ts,date:document.getElementById('fdate').value,day:document.getElementById('fday').value,session:document.getElementById('fsess').value,person_id:label,camera:activeCam,floor_x:ffx.toFixed(4),floor_y:ffy.toFixed(4),space:zi>=0?userZones[zi].name:'Unknown',confidence:d.score.toFixed(2)});
+    if(allRows.length>200000)allRows.shift();
+  });
+}
+
+// ─── UI update ────────────────────────────────────────────────────────────────
+function updateUI(){
+  const t=csvMode?csvT:vid.currentTime||0;
+  const dur=csvMode?csvDur:(vid.duration||0);
+  const pct=dur>0?Math.min(t/dur*100,100):0;
+  document.getElementById('tlf').style.width=pct.toFixed(1)+'%';
+  document.getElementById('tlth').style.left=pct.toFixed(1)+'%';
+  document.getElementById('tslbl').textContent=fmtT(t)+' / '+fmtT(dur);
+  document.getElementById('hts').textContent=buildTS(t).replace('T',' · ');
+  document.getElementById('svdet').textContent=csvMode?getCsvCurrentDots().length:detections.length;
+  document.getElementById('svheat').textContent=heatPts.length;
+  document.getElementById('svtrk').textContent=PIDS.filter(l=>(personSecs[l]||0)>0).length;
+  document.getElementById('svfrm').textContent=Math.round(t*25);
+
+  // ── Persons: always show AA01–AA07, value = seconds present ──
+  const activeLabels=new Set(detections.map(d=>getLabel(d.id)));
+  const csvActiveLabels=new Set(csvMode?getCsvCurrentDots().map(d=>d.label):[]);
+  const allActive=csvMode?csvActiveLabels:activeLabels;
+  const mxP=Math.max(...PIDS.map(l=>personSecs[l]||0),1);
+  document.getElementById('plist').innerHTML=PIDS.map(label=>{
+    const secs=personSecs[label]||0;
+    const pct=Math.round(secs/mxP*100);
+    const col=PCOLS[PIDS.indexOf(label)];
+    const active=allActive.has(label);
+    const assigned=Object.values(labelMap).includes(label);
+    const secsStr=secs>=60?`${Math.floor(secs/60)}m${Math.round(secs%60)}s`:`${Math.round(secs)}s`;
+    return`<div class="prow">
+      <div class="pdot" style="background:${col}${secs>0?'':'55'}"></div>
+      <span class="pnm" style="color:${secs>0?'#9aa0b4':'var(--muted)'}">${label}</span>
+      <div class="bb"><div class="bf" style="width:${pct}%;background:${col}"></div></div>
+      <span class="bv" style="width:32px">${secs>0?secsStr:'—'}</span>
+      <span style="width:8px;font-size:9px;color:${col}">${active?'●':''}</span>
+      ${assigned?`<span style="font-size:8px;color:var(--green)">✓</span>`:''}
+    </div>`;
+  }).join('');
+
+  buildSpaceList();
+}
+
+// ─── Main loop ────────────────────────────────────────────────────────────────
+let lastMs=null;
+function loop(ms){
+  frameCount++;
+  if(csvMode){
+    const dt=lastMs&&csvPlaying?Math.min((ms-lastMs)/1000,.1):0;
+    csvStep(dt);
+  } else {
+    if(playing&&frameCount%DETECT_EVERY===0)runDetect();
+    accumulate();
+  }
+  lastMs=ms;
+  drawVideo();drawFloor();updateUI();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+function startAnalysis(){
+  if(!vid.src&&!csvMode){alert('Upload a video file first.');return;}
+  if(analysisStarted){
+    analysisStarted=false;
+    document.getElementById('start-btn').textContent='▶ Start analysis';
+    document.getElementById('start-btn').style.borderColor='var(--green)';
+    document.getElementById('start-btn').style.color='var(--green)';
+    document.getElementById('start-btn').style.background='rgba(26,150,112,.15)';
+    return;
+  }
+  if(csvMode){beginAnalysis();return;}
+  beginPrescan();
+}
+
+function beginPrescan(){
+  prescanRunning=true;prescanDone=false;prescanTracks={};
+  detections=[];trackerState={};nextId=0;
+  document.getElementById('prescan-modal').style.display='block';
+  document.getElementById('prescan-grid').innerHTML='';
+  document.getElementById('prescan-status').textContent='Scanning video at 16× for all people…';
+  document.getElementById('prescan-btns').style.display='none';
+  vid.currentTime=0;vid.playbackRate=16;
+  vid.play().catch(()=>{});
+  const scanInterval=setInterval(async()=>{
+    if(vid.ended||vid.currentTime>=vid.duration-0.5){
+      clearInterval(scanInterval);vid.pause();vid.playbackRate=speed;
+      prescanRunning=false;prescanDone=true;finishPrescan();return;
+    }
+    if(vid.readyState<2||detecting)return;
+    detecting=true;
+    try{
+      const preds=await model.detect(vid);
+      const persons=preds.filter(p=>p.class==='person'&&p.score>0.45);
+      const newDets=assignTracks(persons.map(p=>({bbox:p.bbox,score:p.score})));
+      newDets.forEach(d=>{
+        if(prescanTracks[d.id])return;
+        const snap=document.createElement('canvas');
+        const vW=vid.videoWidth||640,vH=vid.videoHeight||480;
+        const[bx,by,bw,bh]=d.bbox;
+        const pad=Math.max(bw,bh)*0.12;
+        const sx=Math.max(0,bx-pad),sy=Math.max(0,by-pad);
+        const sw=Math.min(bw+pad*2,vW-sx),sh=Math.min(bh+pad*2,vH-sy);
+        snap.width=80;snap.height=Math.round(80*sh/Math.max(sw,1))||100;
+        try{snap.getContext('2d').drawImage(vid,sx,sy,sw,sh,0,0,snap.width,snap.height);}catch(e){}
+        prescanTracks[d.id]={snap,firstSeen:vid.currentTime,score:d.score};
+        updatePrescanGrid();
+      });
+    }catch(e){}
+    detecting=false;
+  },150);
+}
+
+function updatePrescanGrid(){
+  const grid=document.getElementById('prescan-grid');
+  const ids=Object.keys(prescanTracks).map(Number).sort((a,b)=>a-b);
+  grid.innerHTML='';
+  ids.forEach(id=>{
+    const pt=prescanTracks[id];
+    const isAssigned=labelMap[id]!=null&&labelMap[id]!=='__skip__';
+    const card=document.createElement('div');
+    card.className='pscard'+(isAssigned?' assigned':'');
+    card.innerHTML=`<canvas width="${pt.snap.width}" height="${pt.snap.height}" style="width:100%;height:auto"></canvas>
+      <select onchange="prescanAssign(${id},this.value)">
+        <option value="">Auto (${PIDS[id%PIDS.length]})</option>
+        ${PIDS.map(pid=>`<option value="${pid}"${labelMap[id]===pid?' selected':''}>${pid}</option>`).join('')}
+        <option value="__skip__"${labelMap[id]==='__skip__'?' selected':''}>Skip</option>
+      </select>
+      <div class="psauto">${Math.round(pt.firstSeen)}s in · ${Math.round(pt.score*100)}%</div>`;
+    try{card.querySelector('canvas').getContext('2d').drawImage(pt.snap,0,0);}catch(e){}
+    grid.appendChild(card);
+  });
+  if(!prescanDone)
+    document.getElementById('prescan-status').textContent=`Found ${ids.length} person${ids.length!==1?'s':''} so far… (scanning at 16×)`;
+}
+
+function prescanAssign(trackId,value){
+  if(value===''){delete labelMap[trackId];}
+  else if(value==='__skip__'){labelMap[trackId]='__skip__';}
+  else{
+    Object.keys(labelMap).forEach(id=>{if(labelMap[id]===value&&+id!==trackId)delete labelMap[id];});
+    labelMap[trackId]=value;
+  }
+  updatePrescanGrid();
+}
+
+function finishPrescan(){
+  const n=Object.keys(prescanTracks).length;
+  document.getElementById('prescan-status').textContent=
+    `Scan complete — ${n} person${n!==1?'s':''} found. Assign IDs then click Start analysis.`;
+  document.getElementById('prescan-btns').style.display='flex';
+  updatePrescanGrid();
+}
+
+function confirmPrescan(){
+  Object.keys(labelMap).forEach(id=>{if(labelMap[id]==='__skip__')delete labelMap[id];});
+  document.getElementById('prescan-modal').style.display='none';
+  beginAnalysis();
+}
+
+function beginAnalysis(){
+  heatPts=[];tracks={};spZoneCounts={};personSecs={};allRows=[];
+  heatCache=null;lastHeatLen=0;accumTick=0;
+  detections=[];trackerState={};nextId=0;lastAccumVideoTime=-1;
+  analysisStarted=true;
+  if(!csvMode){
+    vid.currentTime=0;vid.playbackRate=speed;
+    vid.play().catch(e=>alert(e.message));
+    playing=true;updatePlayBtn(true);
+  } else {
+    csvT=0;csvPlaying=true;updatePlayBtn(true);
+  }
+  document.getElementById('start-btn').textContent='⏹ Stop analysis';
+  document.getElementById('start-btn').style.borderColor='var(--red)';
+  document.getElementById('start-btn').style.color='var(--red)';
+  document.getElementById('start-btn').style.background='rgba(217,72,72,.1)';
+}
+
+function togglePlay(){
+  if(csvMode){csvPlaying=!csvPlaying;if(csvT>=csvDur){csvT=0;heatPts=[];heatCache=null;lastHeatLen=0;}updatePlayBtn(csvPlaying);return;}
+  if(!vid.src){alert('Upload a video file first.');return;}
+  const paused=vid.paused;
+  paused?vid.play().catch(e=>alert(e.message)):vid.pause();
+  playing=paused;updatePlayBtn(playing);
+}
+function updatePlayBtn(isPlaying){
+  const ic=document.getElementById('picon'),b=document.getElementById('lbadge');
+  if(isPlaying){ic.innerHTML='<div class="br"></div><div class="br"></div>';ic.className='brs';if(!csvMode){b.textContent='● LIVE';b.className='badge b-live';}}
+  else{ic.innerHTML='<div class="tri"></div>';ic.className='';if(!csvMode){b.textContent='⏸ PAUSED';b.className='badge b-pause';}}
+}
+function seekClick(e){
+  const r=document.getElementById('tlt').getBoundingClientRect(),pct=(e.clientX-r.left)/r.width;
+  if(csvMode){csvT=pct*csvDur;heatPts=[];heatCache=null;lastHeatLen=0;return;}
+  if(vid.duration)vid.currentTime=pct*vid.duration;
+  detections=[];trackerState={};
+}
+function setSpeed(v){speed=parseFloat(v);if(!csvMode&&vid)vid.playbackRate=speed;}
+function setCam(c){activeCam=c;document.getElementById('camlbl').textContent=c+' '+CAM_LABELS[c];document.getElementById('flrcamlbl').textContent=c;}
+function togMode(m){
+  if(m==='heat'){showHeat=!showHeat;document.getElementById('mbh').className='mb'+(showHeat?' on':'');}
+  if(m==='track'){showTrack=!showTrack;document.getElementById('mbt').className='mb'+(showTrack?' on':'');}
+  if(m==='dots'){showDots=!showDots;document.getElementById('mbd').className='mb'+(showDots?' on':'');}
+  if(m==='bg'){showBG=!showBG;document.getElementById('mb-bg').className='mb'+(showBG?' on':'');}
+  if(m==='zones'){showZones=!showZones;document.getElementById('mb-zones').className='mb'+(showZones?' on':'');}
+}
+function resetAll(keepZones=false){
+  heatPts=[];tracks={};spZoneCounts={};personSecs={};allRows=[];heatCache=null;lastHeatLen=0;accumTick=0;
+  detections=[];trackerState={};nextId=0;frameCount=0;
+  labelMap={};pendingLabelTrackId=null;closeLabelPicker();
+  videoStartTime=null;
+  analysisStarted=false;
+  if(!keepZones){userZones=[];}
+  if(csvMode){csvT=0;csvPlaying=false;updatePlayBtn(false);}
+  // Reset start button
+  const sb=document.getElementById('start-btn');
+  if(sb){sb.textContent='▶ Start analysis';sb.style.borderColor='var(--green)';sb.style.color='var(--green)';sb.style.background='rgba(26,150,112,.15)';}
+}
+
+// ─── Video confirm dialog ─────────────────────────────────────────────────────
+function loadVideoFile(inp){
+  const file=inp.files[0];if(!file)return;
+  pendingVideoFile=file;
+  const tmpUrl=URL.createObjectURL(file);
+  const tmpVid=document.createElement('video');tmpVid.preload='metadata';tmpVid.src=tmpUrl;
+  tmpVid.onloadedmetadata=()=>{openConfirmDialog(file.name,tmpVid.duration);URL.revokeObjectURL(tmpUrl);};
+  tmpVid.onerror=()=>{openConfirmDialog(file.name,0);URL.revokeObjectURL(tmpUrl);};
+}
+function openConfirmDialog(name,dur){
+  document.getElementById('cf-name').textContent=name;
+  document.getElementById('cf-dur').textContent=dur>0?`${Math.floor(dur/60)}m ${Math.floor(dur%60)}s`:'Unknown';
+  const cams=['C1','C2','C3','C4','C5','C6','C7'];
+  document.getElementById('cf-cam-grid').innerHTML=cams.map(c=>`<button class="cam-btn${c===confirmedCam?' sel':''}" onclick="selConfirmCam('${c}',this)"><b>${c}</b><div style="font-size:8px;opacity:.7;margin-top:1px">${CAM_LABELS[c]}</div></button>`).join('');
+  document.getElementById('cf-date').value=document.getElementById('fdate').value||'2026-02-20';
+  document.getElementById('cf-time').value='08:00:00';
+  document.getElementById('cf-day').value=document.getElementById('fday').value||'1';
+  document.getElementById('confirm-modal').style.display='block';
+}
+function selConfirmCam(c,btn){confirmedCam=c;document.querySelectorAll('.cam-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
+function confirmVideo(){
+  const date=document.getElementById('cf-date').value,time=document.getElementById('cf-time').value;
+  videoStartTime=new Date(`${date}T${time}`);
+  document.getElementById('fdate').value=date;
+  document.getElementById('fday').value=document.getElementById('cf-day').value;
+  document.getElementById('fsess').value=document.getElementById('cf-sess').value;
+  setCam(confirmedCam);document.getElementById('camsel').value=confirmedCam;
+  csvMode=false;
+  vid.src=URL.createObjectURL(pendingVideoFile);
+  vid.onloadedmetadata=()=>{
+    vid.playbackRate=speed;
+    document.getElementById('vidinfo').textContent=`${pendingVideoFile.name} · ${vid.duration.toFixed(1)}s · ${confirmedCam} · ${date} ${time.slice(0,5)}`;
+    document.getElementById('uzv').className='upz ok';
+    document.getElementById('uzv').innerHTML=`<b>${pendingVideoFile.name}</b>${confirmedCam} · ${date} ${time.slice(0,5)}`;
+    document.getElementById('lbadge').textContent='MODEL READY';document.getElementById('lbadge').className='badge b-ready';
+  };
+  vid.onerror=()=>{document.getElementById('vidinfo').textContent='Error loading video';};
+  resetAll(true);
+  document.getElementById('confirm-modal').style.display='none';
+}
+function loadFloor(inp){
+  const file=inp.files[0];if(!file)return;
+  const img=new Image();img.onload=()=>{floorImg=img;heatCache=null;document.getElementById('uzf').className='upz ok';document.getElementById('uzf').innerHTML=`<b>${file.name}</b>Floor plan loaded`;showBG=true;document.getElementById('mb-bg').className='mb on';};
+  img.src=URL.createObjectURL(file);
+}
+
+// ─── Heatmap editor ────────────────────────────────────────────────────────────
+function openHeatEditor(){
+  gradEdit=gradStops.map(s=>({...s}));
+  renderGradEditor();
+  document.getElementById('heat-modal').style.display='block';
+}
+function renderGradEditor(){
+  const el=document.getElementById('grad-stops');
+  el.innerHTML=gradEdit.map((s,i)=>`
+    <div class="grad-stop">
+      <input type="color" value="${s.color}" oninput="gradEdit[${i}].color=this.value;updateGradPreview()">
+      <input type="range" min="0" max="100" step="1" value="${Math.round(s.pos*100)}" oninput="gradEdit[${i}].pos=this.value/100;document.querySelectorAll('#grad-stops .grad-stop span')[${i}].textContent=this.value+'%';updateGradPreview()">
+      <span>${Math.round(s.pos*100)}%</span>
+    </div>`).join('');
+  updateGradPreview();
+}
+function updateGradPreview(){document.getElementById('grad-preview-bar').style.background=buildCSSGrad(gradEdit);}
+function addGradStop(){gradEdit.push({pos:.5,color:'#ffffff'});renderGradEditor();}
+function removeGradStop(){if(gradEdit.length>2){gradEdit.pop();renderGradEditor();}}
+function resetGradient(){gradEdit=[{pos:0,color:'#0a1628'},{pos:.3,color:'#1a5fa5'},{pos:.6,color:'#d94848'},{pos:1,color:'#ffdd00'}];renderGradEditor();}
+function applyGradient(){gradStops=gradEdit.map(s=>({...s}));heatCache=null;lastHeatLen=0;updateLegBar();document.getElementById('heat-modal').style.display='none';}
+
+// ─── Zone drawing ──────────────────────────────────────────────────────────────
+function toggleZoneMode(){
+  zoneModeOn=!zoneModeOn;
+  const btn=document.getElementById('zone-btn');
+  btn.className='mb'+(zoneModeOn?' on-purple':'');
+  btn.textContent=zoneModeOn?'Zones ON':'Zones';
+  fc.style.cursor=zoneModeOn?'crosshair':'default';
+  if(!zoneModeOn)zoneDraft=[];
+}
+fc.addEventListener('click',e=>{
+  if(!zoneModeOn)return;
+  const r=fc.getBoundingClientRect(),nx=(e.clientX-r.left)/r.width,ny=(e.clientY-r.top)/r.height;
+  if(zoneDraft.length>=3){const fp=zoneDraft[0],cpx=nx*fc.width,cpy=ny*fc.height,fpx=fp[0]*fc.width,fpy=fp[1]*fc.height;if(Math.hypot(cpx-fpx,cpy-fpy)<14){pendingZone={pts:zoneDraft.slice(),closed:true};zoneDraft=[];openZoneDialog();return;}}
+  zoneDraft.push([nx,ny]);
+});
+fc.addEventListener('dblclick',e=>{
+  if(!zoneModeOn||zoneDraft.length<2)return;
+  e.preventDefault();pendingZone={pts:zoneDraft.slice(),closed:false};zoneDraft=[];openZoneDialog();
+});
+function openZoneDialog(){document.getElementById('zname').value='';document.getElementById('zone-modal').style.display='block';setTimeout(()=>document.getElementById('zname').focus(),50);}
+function confirmZone(){
+  const name=document.getElementById('zname').value.trim()||'Zone '+(userZones.length+1);
+  const color=document.getElementById('zcolor').value;
+  if(pendingZone){userZones.push({...pendingZone,name,color});pendingZone=null;}
+  document.getElementById('zone-modal').style.display='none';
+}
+function cancelZone(){pendingZone=null;document.getElementById('zone-modal').style.display='none';}
+document.getElementById('zname').addEventListener('keydown',e=>{if(e.key==='Enter')confirmZone();if(e.key==='Escape')cancelZone();});
+
+// ─── Calibration ──────────────────────────────────────────────────────────────
+let calSrc=[],calDst=[];
+function openCalibration(){
+  calSrc=[];calDst=[];
+  const ex=homos[activeCam];if(ex){calSrc=ex.src.map(p=>[...p]);calDst=ex.dst.map(p=>[...p]);}
+  document.getElementById('cal-cam-name').textContent=activeCam;
+  document.getElementById('cal-modal').style.display='block';
+  renderCal();
+}
+function renderCal(){
+  const cv=document.getElementById('cal-v'),cf=document.getElementById('cal-f');
+  const vctx=cv.getContext('2d'),fctx=cf.getContext('2d');
+  vctx.fillStyle='#050810';vctx.fillRect(0,0,cv.width,cv.height);
+  if(vid.readyState>=2){try{vctx.drawImage(vid,0,0,cv.width,cv.height);}catch(e){}}else{vctx.fillStyle='rgba(75,90,115,.35)';vctx.font='9px monospace';vctx.textAlign='center';vctx.fillText('Play video first',cv.width/2,cv.height/2);}
+  drawCalDots(vctx,calSrc,cv.width,cv.height);
+  fctx.fillStyle='#0c0e17';fctx.fillRect(0,0,cf.width,cf.height);
+  if(floorImg){try{fctx.drawImage(floorImg,0,0,cf.width,cf.height);}catch(e){}}
+  else{fctx.fillStyle='rgba(75,90,115,.35)';fctx.font='9px monospace';fctx.textAlign='center';fctx.fillText('Upload floor plan',cf.width/2,cf.height/2);}
+  drawCalDots(fctx,calDst,cf.width,cf.height);
+  const n=Math.min(calSrc.length,calDst.length),ok=n>=4&&calSrc.length===calDst.length;
+  document.getElementById('cal-v-info').textContent=`${calSrc.length} pts${calSrc.length>=4?' ✓':''}`;
+  document.getElementById('cal-f-info').textContent=`${calDst.length} pts${calDst.length>=4?' ✓':''}`;
+  document.getElementById('cal-status').innerHTML=ok?`<span style="color:var(--green)">✓ ${n} pairs ready</span>`:calSrc.length!==calDst.length?`<span style="color:var(--amber)">Unbalanced — ${calSrc.length} cam · ${calDst.length} floor — click Undo to fix</span>`:`Add ≥4 pairs. Camera side first, then floor.`;
+  cv.onclick=e=>{
+    const r=cv.getBoundingClientRect();
+    calSrc.push([(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]);
+    renderCal();
+  };
+  cf.onclick=e=>{
+    if(calDst.length>=calSrc.length){alert('Add a camera point first, then its matching floor point.');return;}
+    const r=cf.getBoundingClientRect();
+    calDst.push([(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]);
+    renderCal();
+  };
+}
+function drawCalDots(ctx,pts,W,H){pts.forEach((p,i)=>{const x=p[0]*W,y=p[1]*H,col=PTCOLS[i%PTCOLS.length];ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);ctx.fillStyle=col+'cc';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='white';ctx.font='bold 7px monospace';ctx.textAlign='center';ctx.fillText(i+1,x,y+2.5);});}
+function undoCal(){
+  // Remove the last point added on whichever side is ahead (or both if equal)
+  if(calSrc.length>calDst.length){ calSrc.pop(); }
+  else if(calDst.length>calSrc.length){ calDst.pop(); }
+  else if(calSrc.length>0){ calSrc.pop(); calDst.pop(); }
+  renderCal();
+}
+function undoCalCam(){ if(calSrc.length>0){ calSrc.pop(); renderCal(); } }
+function undoCalFloor(){ if(calDst.length>0){ calDst.pop(); renderCal(); } }
+function deleteCalForCam(){
+  if(!homos[activeCam]){alert('No saved homography for '+activeCam);return;}
+  if(confirm(`Delete saved homography for ${activeCam}?`)){ delete homos[activeCam]; heatCache=null; renderCal(); alert('Deleted.'); }
+}
+function clearCal(){calSrc=[];calDst=[];renderCal();}
+function applyH(){
+  const n=Math.min(calSrc.length,calDst.length);
+  if(n<4){alert('Need ≥4 matched pairs to compute homography.');return;}
+  if(calSrc.length!==calDst.length){
+    alert(`Unbalanced: ${calSrc.length} camera pts vs ${calDst.length} floor pts.\nUse "Undo cam pt" or "Undo floor pt" to fix.`);return;
+  }
+  homos[activeCam]={src:calSrc.slice(0,n),dst:calDst.slice(0,n)};
+  heatCache=null;
+  document.getElementById('cal-modal').style.display='none';
+  // Update calibrate button to show which cams are done
+  updateCalBtn();
+}
+function updateCalBtn(){
+  const done=Object.keys(homos).filter(c=>homos[c]?.src?.length>=4);
+  const btn=document.getElementById('calbtn');
+  if(btn){
+    btn.textContent=done.length?`Calibrate (${done.join(',')})✓`:'Calibrate';
+    btn.style.color=done.length?'var(--green)':'var(--muted)';
+    btn.style.borderColor=done.length?'var(--green)':'var(--bd2)';
+  }
+}
+
+// ─── Camera position editor ────────────────────────────────────────────────────
+let cpeSelectedCam='C1';
+function openCamEditor(){
+  cpeSelectedCam='C1';
+  document.getElementById('camposedit-modal').style.display='block';
+  renderCamEditor();
+}
+function renderCamEditor(){
+  const cams=['C1','C2','C3','C4','C5','C6','C7'];
+  document.getElementById('cpe-cam-grid').innerHTML=cams.map(c=>`<button class="cam-btn${c===cpeSelectedCam?' sel':''}" onclick="selectCPECam('${c}',this)"><b>${c}</b><div style="font-size:8px;opacity:.7;margin-top:1px">${CAM_LABELS[c]}</div></button>`).join('');
+  const canvas=document.getElementById('cpe-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#0c0e17';ctx.fillRect(0,0,W,H);
+  if(floorImg){try{ctx.drawImage(floorImg,0,0,W,H);ctx.fillStyle='rgba(8,10,20,.35)';ctx.fillRect(0,0,W,H);}catch(e){}}
+  // Draw all cams
+  Object.entries(camPos).forEach(([cid,pos])=>{
+    const cx=pos[0]*W,cy=pos[1]*H,isSel=cid===cpeSelectedCam;
+    ctx.beginPath();ctx.arc(cx,cy,isSel?7:4.5,0,Math.PI*2);
+    ctx.fillStyle=isSel?'#c95c28':'rgba(120,135,165,.5)';ctx.fill();
+    if(isSel){ctx.beginPath();ctx.arc(cx,cy,11,0,Math.PI*2);ctx.strokeStyle='rgba(201,92,40,.4)';ctx.lineWidth=1.5;ctx.stroke();}
+    ctx.fillStyle=isSel?'white':'rgba(140,155,185,.7)';ctx.font=`bold ${isSel?6:5}px monospace`;ctx.textAlign='center';ctx.fillText(cid,cx,cy+2);
+  });
+  // List
+  document.getElementById('cpe-list').innerHTML=cams.map(c=>`<div class="cam-pos-item"><div class="dot" style="background:${c===cpeSelectedCam?'#c95c28':'rgba(120,135,165,.5)'}"></div><span>${c} — ${CAM_LABELS[c]}</span><small>(${(camPos[c][0]*100).toFixed(0)}%, ${(camPos[c][1]*100).toFixed(0)}%)</small></div>`).join('');
+  // Click handler
+  canvas.onclick=e=>{
+    const r=canvas.getBoundingClientRect(),nx=(e.clientX-r.left)/r.width,ny=(e.clientY-r.top)/r.height;
+    camPos[cpeSelectedCam]=[+nx.toFixed(3),+ny.toFixed(3)];
+    renderCamEditor();
+  };
+}
+function selectCPECam(c,btn){cpeSelectedCam=c;document.querySelectorAll('#cpe-cam-grid .cam-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');renderCamEditor();}
+function resetCamPositions(){camPos=Object.fromEntries(Object.entries(DEFAULT_CAM_POS).map(([k,v])=>[k,[...v]]));renderCamEditor();}
+
+// ─── Label picker ──────────────────────────────────────────────────────────────
+let labelModeOn=false;
+function toggleLabelMode(){
+  labelModeOn=!labelModeOn;
+  const btn=document.getElementById('label-btn');
+  btn.className='mb'+(labelModeOn?' on-amber':'');
+  btn.textContent=labelModeOn?'Label ON':'Label';
+  vc.style.cursor=labelModeOn?'crosshair':'default';
+  if(!labelModeOn)closeLabelPicker();
+}
+vc.addEventListener('click',e=>{
+  if(!labelModeOn||!detections.length)return;
+  const rect=vc.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const vW=vid.videoWidth||vc.width,vH=vid.videoHeight||vc.height;
+  const scx=vc.width/vW,scy=vc.height/vH;
+  let best=null,bestDist=Infinity;
+  detections.forEach(d=>{const[bx,by,bw,bh]=d.bbox,px=bx*scx,py=by*scy,pw=bw*scx,ph=bh*scy;if(mx>=px&&mx<=px+pw&&my>=py&&my<=py+ph){const dist=Math.hypot(mx-(px+pw/2),my-(py+ph/2));if(dist<bestDist){bestDist=dist;best=d;}}});
+  if(!best)detections.forEach(d=>{const[bx,by,bw,bh]=d.bbox,cx=(bx+bw/2)*scx,cy=(by+bh/2)*scy,dist=Math.hypot(mx-cx,my-cy);if(dist<bestDist){bestDist=dist;best=d;}});
+  if(!best||bestDist>120)return;
+  openLabelPicker(best.id,e.clientX,e.clientY);
+});
+function openLabelPicker(trackId,clientX,clientY){
+  pendingLabelTrackId=trackId;
+  document.getElementById('lp-tid').textContent=trackId;
+  document.getElementById('lp-custom').value='';
+  const picker=document.getElementById('labelpicker');
+  document.getElementById('lp-btns').innerHTML=PIDS.map(lbl=>{
+    const taken=[...Object.entries(labelMap)].find(([id,l])=>l===lbl&&+id!==trackId);
+    const current=labelMap[trackId]===lbl;
+    return`<button onclick="assignLabel('${lbl}')" style="font-size:10px;padding:4px 5px;border-radius:4px;cursor:pointer;font-family:inherit;font-weight:${current?'700':'400'};border:1px solid ${current?'var(--green)':taken?'rgba(255,255,255,.07)':'var(--bd2)'};background:${current?'rgba(26,150,112,.2)':taken?'rgba(255,255,255,.03)':'var(--surf3)'};color:${current?'var(--green)':taken?'var(--muted)':'var(--text)'}">${lbl}${current?' ✓':''}</button>`;
+  }).join('');
+  picker.style.display='block';
+  const pw=176,ph=210,vw=window.innerWidth,vh=window.innerHeight;
+  picker.style.left=Math.max(4,Math.min(clientX+8,vw-pw-10))+'px';
+  picker.style.top=Math.max(4,Math.min(clientY-20,vh-ph-10))+'px';
+}
+function assignLabel(lbl){if(pendingLabelTrackId==null)return;Object.keys(labelMap).forEach(id=>{if(labelMap[id]===lbl)delete labelMap[id];});labelMap[pendingLabelTrackId]=lbl;closeLabelPicker();}
+function applyCustomLabel(){const val=document.getElementById('lp-custom').value.trim();if(!val||pendingLabelTrackId==null)return;labelMap[pendingLabelTrackId]=val.toUpperCase();closeLabelPicker();}
+function resetAllLabels(){
+  if(!Object.keys(labelMap).length){closeLabelPicker();return;}
+  if(confirm('Reset all label assignments? People will revert to auto-assigned IDs.')){
+    labelMap={};closeLabelPicker();
+  }
+}
+function clearLabelForTrack(){if(pendingLabelTrackId!=null)delete labelMap[pendingLabelTrackId];closeLabelPicker();}
+function closeLabelPicker(){document.getElementById('labelpicker').style.display='none';pendingLabelTrackId=null;}
+
+// ─── CSV export ────────────────────────────────────────────────────────────────
+const COLS=['frame','datetime','date','day','session','person_id','camera','floor_x','floor_y','space','confidence'];
+function toCSV(rows){return[COLS.join(','),...rows.map(r=>COLS.map(c=>`"${r[c]??''}"`).join(','))].join('\n');}
+function dlCSV(content,name){if(!allRows.length&&!csvFrames.length){alert('No data yet.');return;}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type:'text/csv'}));a.download=name;a.click();}
+function exportSessionCSV(){const day=document.getElementById('fday').value,date=document.getElementById('fdate').value,sess=document.getElementById('fsess').value.replace(/[\s–—]+/g,'_');const rows=allRows.filter(r=>r.day===day&&r.date===date);dlCSV(toCSV(rows.length?rows:allRows),`space_usage_${date}_day${day}_${sess}.csv`);}
+function exportAllCSV(){dlCSV(toCSV(allRows),'space_usage_all_tracks.csv');}
+
+// ─── Boot ──────────────────────────────────────────────────────────────────────
+loadModel();
+updateLegBar();
+updateCalBtn();
+</script>
+</body>
+</html>
