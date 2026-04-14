@@ -141,6 +141,7 @@ input[type=file]{display:none}
 .pscard{background:var(--surf2);border:1px solid var(--bd2);border-radius:6px;padding:7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:border-color .15s}
 .pscard:hover{border-color:var(--blue)}
 .pscard.assigned{border-color:var(--green)}
+.pscard.merged{border-color:var(--amber)}
 .pscard canvas{border-radius:3px;display:block;width:100%}
 .pscard .pslabel{font-size:10px;font-weight:700;font-family:monospace;color:var(--text)}
 .pscard .psauto{font-size:9px;color:var(--muted)}
@@ -510,6 +511,7 @@ let analysisStarted=false;
 let prescanRunning=false;
 let prescanTracks={};    // {trackId: {snapCanvas, bbox, firstSeen}}
 let prescanDone=false;
+let mergeMap={};         // {trackId: representativeTrackId} — merged tracks
 
 // CSV replay mode
 let csvMode=false, csvFrames=[], csvT=0, csvDur=0, csvPlaying=false;
@@ -541,7 +543,11 @@ function buildTS(vs){
   base.setSeconds(base.getSeconds()+Math.round(vs));
   return base.toISOString().replace('T',' ').slice(0,19);
 }
-function getLabel(id){return labelMap[id]??PIDS[id%PIDS.length]??`T${id}`;}
+function getLabel(id){
+  // Follow merge chain to representative
+  const rep=mergeMap[id]??id;
+  return labelMap[rep]??PIDS[rep%PIDS.length]??`T${rep}`;
+}
 function getColor(id){const l=getLabel(id);const i=PIDS.indexOf(l);return i>=0?PCOLS[i]:PCOLS[id%PCOLS.length];}
 function updateLegBar(){const el=document.getElementById('legbar-el');if(el)el.style.background=buildCSSGrad(gradStops);}
 
@@ -972,7 +978,7 @@ function startAnalysis(){
 }
 
 function beginPrescan(){
-  prescanRunning=true;prescanDone=false;prescanTracks={};
+  prescanRunning=true;prescanDone=false;prescanTracks={};mergeMap={};
   detections=[];trackerState={};nextId=0;
   document.getElementById('prescan-modal').style.display='block';
   document.getElementById('prescan-grid').innerHTML='';
@@ -1013,32 +1019,112 @@ function updatePrescanGrid(){
   const grid=document.getElementById('prescan-grid');
   const ids=Object.keys(prescanTracks).map(Number).sort((a,b)=>a-b);
   grid.innerHTML='';
+
+  // Build merge groups: {representativeId: [mergedIds...]}
+  // mergeMap[id] = representative id it's merged into
+  const rep={}; // id → representative
+  ids.forEach(id=>{rep[id]=id;});
+  Object.entries(mergeMap).forEach(([id,into])=>{rep[+id]=+into;});
+
+  // Group by representative
+  const groups={};
   ids.forEach(id=>{
-    const pt=prescanTracks[id];
-    const isAssigned=labelMap[id]!=null&&labelMap[id]!=='__skip__';
+    const r=rep[id];
+    if(!groups[r])groups[r]=[];
+    groups[r].push(id);
+  });
+
+  // Render one card per group
+  Object.entries(groups).forEach(([repId,groupIds])=>{
+    repId=+repId;
+    const pt=prescanTracks[repId];
+    const label=labelMap[repId];
+    const isAssigned=label!=null&&label!=='__skip__';
+    const isMerged=groupIds.length>1;
+
     const card=document.createElement('div');
-    card.className='pscard'+(isAssigned?' assigned':'');
-    card.innerHTML=`<canvas width="${pt.snap.width}" height="${pt.snap.height}" style="width:100%;height:auto"></canvas>
-      <select onchange="prescanAssign(${id},this.value)">
-        <option value="">Auto (${PIDS[id%PIDS.length]})</option>
-        ${PIDS.map(pid=>`<option value="${pid}"${labelMap[id]===pid?' selected':''}>${pid}</option>`).join('')}
-        <option value="__skip__"${labelMap[id]==='__skip__'?' selected':''}>Skip</option>
+    card.className='pscard'+(isAssigned?' assigned':isMerged?' merged':'');
+
+    // Merged thumbnails strip
+    const thumbsHtml=groupIds.map(gid=>{
+      const gpt=prescanTracks[gid];
+      return`<canvas data-gid="${gid}" width="${gpt.snap.width}" height="${gpt.snap.height}"
+        style="width:${Math.floor(100/groupIds.length)-2}%;height:auto;display:inline-block;border-radius:2px;${gid!==repId?'opacity:.7;border:1px solid var(--amber)':''}"></canvas>`;
+    }).join('');
+
+    // Merge-with dropdown: other group representatives
+    const otherReps=Object.keys(groups).map(Number).filter(r=>r!==repId);
+    const mergeOpts=otherReps.length>0
+      ?`<option value="">— merge with —</option>`+otherReps.map(r=>{
+          const rl=labelMap[r]||`Track ${r}`;
+          return`<option value="merge:${r}">+ ${rl} (T${r})</option>`;
+        }).join('')
+      :'<option value="">no other tracks</option>';
+
+    card.innerHTML=`
+      <div style="width:100%;display:flex;gap:2px;margin-bottom:3px">${thumbsHtml}</div>
+      ${isMerged?`<div style="font-size:8px;color:var(--amber);text-align:center">${groupIds.length} tracks merged</div>`:''}
+      <select onchange="prescanAssign(${repId},this.value)" style="width:100%">
+        <option value="">Auto (${PIDS[repId%PIDS.length]})</option>
+        ${PIDS.map(pid=>`<option value="${pid}"${label===pid?' selected':''}>${pid}</option>`).join('')}
+        <option value="__skip__"${label==='__skip__'?' selected':''}>Skip</option>
       </select>
-      <div class="psauto">${Math.round(pt.firstSeen)}s in · ${Math.round(pt.score*100)}%</div>`;
-    try{card.querySelector('canvas').getContext('2d').drawImage(pt.snap,0,0);}catch(e){}
+      <select onchange="prescanMerge(${repId},this.value)" style="width:100%;margin-top:3px;font-size:9px;color:var(--muted)">
+        ${mergeOpts}
+      </select>
+      ${isMerged?`<button onclick="prescanUnmerge(${repId})" style="font-size:8px;padding:1px 5px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;border-radius:3px;width:100%;font-family:inherit;margin-top:2px">Unmerge</button>`:''}
+      <div class="psauto">${Math.round(pt.firstSeen)}s · ${Math.round(pt.score*100)}%</div>`;
+
+    // Draw thumbnails
+    groupIds.forEach(gid=>{
+      const c=card.querySelector(`canvas[data-gid="${gid}"]`);
+      try{c.getContext('2d').drawImage(prescanTracks[gid].snap,0,0,c.width,c.height);}catch(e){}
+    });
     grid.appendChild(card);
   });
+
   if(!prescanDone)
-    document.getElementById('prescan-status').textContent=`Found ${ids.length} person${ids.length!==1?'s':''} so far… (scanning at 16×)`;
+    document.getElementById('prescan-status').textContent=
+      `Found ${ids.length} track${ids.length!==1?'s':''} (${Object.keys(groups).length} unique people so far)… scanning at 16×`;
 }
 
 function prescanAssign(trackId,value){
   if(value===''){delete labelMap[trackId];}
   else if(value==='__skip__'){labelMap[trackId]='__skip__';}
   else{
+    // Remove this label from any other representative
     Object.keys(labelMap).forEach(id=>{if(labelMap[id]===value&&+id!==trackId)delete labelMap[id];});
     labelMap[trackId]=value;
+    // Also apply label to all merged tracks
+    Object.entries(mergeMap).forEach(([id,into])=>{
+      if(+into===trackId) labelMap[+id]=value;
+    });
   }
+  updatePrescanGrid();
+}
+
+function prescanMerge(repId, value){
+  if(!value||!value.startsWith('merge:'))return;
+  const targetRep=+value.replace('merge:','');
+  // Merge targetRep group into repId group
+  // All tracks currently pointing to targetRep now point to repId
+  Object.keys(prescanTracks).map(Number).forEach(id=>{
+    const currentRep=mergeMap[id]??id;
+    if(currentRep===targetRep) mergeMap[id]=repId;
+  });
+  mergeMap[targetRep]=repId;
+  // Copy label if repId has none
+  if(!labelMap[repId]&&labelMap[targetRep]&&labelMap[targetRep]!=='__skip__')
+    labelMap[repId]=labelMap[targetRep];
+  delete labelMap[targetRep];
+  updatePrescanGrid();
+}
+
+function prescanUnmerge(repId){
+  // Detach all non-representative tracks from this group
+  Object.keys(mergeMap).forEach(id=>{
+    if(+mergeMap[id]===repId&&+id!==repId) delete mergeMap[+id];
+  });
   updatePrescanGrid();
 }
 
